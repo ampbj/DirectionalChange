@@ -9,25 +9,24 @@ function init(data::DataFrame, dc_offset::AbstractVector{<:Number})
                 Module expects only two columns for the DataFrame: Timestamp and Price")
     end
     rename!(data, [:Timestamp, :Price])
-    prepare(data, dc_offset)
-    return data
+    sort!(dc_offset, rev=true)
+    return data, dc_offset
 end
 
 function pct_change(input::AbstractVector{<:Number}, period::Int=1)
-    res = @view(input[period + 1:end]) ./ @view(input[1:end - period]) .- 1
-    [missing; res]
+    res = @view(input[(period + 1):end]) ./ @view(input[1:(end - period)]) .- 1
+    [fill(missing, period); res]
 end
 
 function prepare(data, dc_offset)
     # preparing dataframe for getting fit
-    sort!(dc_offset, rev=true)
     insertcols!(data, :pct_change => pct_change(data.Price))
+    dropmissing!(data, :pct_change)
     insertcols!(data, (:BBTheta => false))
     insertcols!(data, :OSV => NaN)
     [insertcols!(data, "Event_$(current_offset_value)" => "")
                     for current_offset_value in dc_offset]
-    fit(data, dc_offset)
-    return data
+    return data, dc_offset
 end
 
 function fit(data, dc_offset)
@@ -57,11 +56,9 @@ function fit(data, dc_offset)
                             data[(data.Timestamp .== row.Timestamp), "OSV"] = [osv_value]
                         end
                         dc_current_lowest_price = data[(data.Timestamp .== DC_lowest_price_index[index]), "Event_$(dc_offset[1])"]
-                        if dc_current_lowest_price == ["DXP"] || dc_current_lowest_price == ["Down+DXP"]
-                            data[(data.Timestamp .== row.Timestamp), "BBTheta"] = [true]
-                        else
+                        dc_current_lowest_price == ["DXP"] || dc_current_lowest_price == ["Down+DXP"] ?
+                            data[(data.Timestamp .== row.Timestamp), "BBTheta"] = [true] :
                             data[(data.Timestamp .== row.Timestamp), "BBTheta"] = [false]
-                        end
                     end
                     DC_highest_price[index] = row.Price
                     DC_highest_price_index[index] = row.Timestamp
@@ -99,9 +96,11 @@ function fit(data, dc_offset)
             end
         end
     end
+    return data
 end
+
 # Calculating OSV value as an independent variable used for prediction according to the paper
-    function OSV(data, price, STheta_extreme_index, BTheta, direction)
+function OSV(data, price, STheta_extreme_index, BTheta, direction)
     BTheta_column = "Event_$BTheta"
     BTheta_rows = data[isless.(data.Timestamp, STheta_extreme_index),:]
     BTheta_rows = BTheta_rows[.!isempty.(BTheta_rows[!,BTheta_column]),:]
@@ -113,7 +112,7 @@ end
     end
 end
 
-    function calculate_OSV_value(direction, price, BTheta, rows)
+function calculate_OSV_value(direction, price, BTheta, rows)
     BTheta_column = "Event_$BTheta"
     if direction == "Down"
         alternate_direction_value = "Down+DXP"
@@ -125,7 +124,7 @@ end
         if row[1][BTheta_column] == direction || row[1][BTheta_column] == alternate_direction_value
             PDCC_BTheta = row[1].Price
             OSV_value = ((price - PDCC_BTheta) /
-                        PDCC_BTheta) / BTheta
+                            PDCC_BTheta) / BTheta
             return OSV_value
         end
     end

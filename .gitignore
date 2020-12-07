@@ -1,1 +1,5 @@
 /Manifest.toml
+test/internal_test
+.vscode
+.DS_Store
+result

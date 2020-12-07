@@ -3,6 +3,13 @@ uuid = "5f11ffe7-34e6-4246-9f7c-5cc402eb95fd"
 authors = ["Ryan Jadidi"]
 version = "0.1.0"
 
+[deps]
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
+DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
+MarketData = "945b72a4-3b13-509d-9b46-1525bb5c06de"
+Pipe = "b98c9c47-44ae-5843-9183-064241ee97a0"
+
 [compat]
 julia = "1"
 
