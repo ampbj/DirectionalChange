@@ -11,6 +11,7 @@ MarketData = "945b72a4-3b13-509d-9b46-1525bb5c06de"
 Pipe = "b98c9c47-44ae-5843-9183-064241ee97a0"
 
 [compat]
+DataFrames = "0.22"
 julia = "1"
 
 [extras]
