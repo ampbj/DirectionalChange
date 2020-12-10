@@ -12,6 +12,7 @@ Pipe = "b98c9c47-44ae-5843-9183-064241ee97a0"
 PyCall = "438e738f-606a-5dbb-bf0a-cddfbfd45ab0"
 
 [compat]
+PyCall = "1.92"
 julia = "1"
 
 [extras]
