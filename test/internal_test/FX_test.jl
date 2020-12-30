@@ -12,12 +12,12 @@ pd = pyimport("pandas")
 np = pyimport("numpy")
 
 
-# data = normpath(abspath(@__FILE__), "../../../../../data/fx_usd_jpy/fx_usd_jpy_close_only/all.csv")
-# result_path = normpath(abspath(@__FILE__), "../../../result/all_usd_jpy.csv")
-# python_result_path = normpath(abspath(@__FILE__), "../../../result/python.csv")
+data = normpath(abspath(@__FILE__), "../../../../../data/fx_usd_jpy/fx_usd_jpy_close_only/all.csv")
+result_path = normpath(abspath(@__FILE__), "../../../result/all_usd_jpy.csv")
+python_result_path = normpath(abspath(@__FILE__), "../../../result/python.csv")
 
 
-function test_dr_forex(data::CSV.File, result_path ;save_file=false, plt=false, dc_offset=[0.01,0.02])
+function test_dr_forex(data::CSV.File, result_path ;save_file=false, plt=false, dc_offset=[0.01])
 	df = CSV.read(data, DataFrame)
 	df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSS")
 	data = @pipe MarketRegime.init(df, dc_offset) |> MarketRegime.prepare(_...) |> MarketRegime.fit(_...)
@@ -31,16 +31,18 @@ function test_dr_forex(data::CSV.File, result_path ;save_file=false, plt=false, 
 	end
 	return nothing
 end
-function test_dr_forex(data::DataFrame, result_path ;save_file=false, plt=false, dc_offset=[0.01,0.02])
+function test_dr_forex(data::DataFrame, result_path ;save_file=false, plt=false, dc_offset=[0.01])
 	df = data
-	# df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSS")
+	df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSS")
 	data = @pipe MarketRegime.init(df, dc_offset) |> MarketRegime.prepare(_...) |> MarketRegime.fit(_...)
 	if save_file
 		writing_csv = @task CSV.write(result_path, data)
 		schedule(writing_csv)
 	end
 	if plt
-		wait(writing_csv)
+		if save_file
+			wait(writing_csv)
+		end
 		plot_graph(result_path)
 	end
 	return nothing
@@ -56,10 +58,12 @@ end
 
 function market_data_test()
 	t = Dates.now()
-	data = yahoo(:SPY, YahooOpt(period1=t - Year(1), period2=t, interval="1d"))
+	data = DataFrame(yahoo(:SPY, YahooOpt(period1=t - Year(1), period2=t, interval="1d")))
+	data = convert(DataFrame, data)[!, [:timestamp, :Close ]]
 	result_path = normpath(abspath(@__FILE__), "../../../result/spy_one_year.csv")
-	test_dr_forex(data, result_path, save_file=true, plt=true, dc_offset=[0.1,0.2])
+	test_dr_forex(data, result_path, save_file=true, plt=false, dc_offset=[0.1])
 end
-# test_dr_forex(save_file=true, plt=true)
+df = CSV.read(data, DataFrame)
+test_dr_forex(df, result_path, save_file=true, plt=false)
 # plot_graph(result_path)
 # market_data_test()
