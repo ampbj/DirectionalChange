@@ -8,6 +8,9 @@ function init(data::DataFrame, dc_offset::AbstractVector{<:Number})
         error("Data is not aligned with the required structure!
                 Module expects only two columns for the DataFrame: Timestamp and Price")
     end
+    if dc_offset != 1 || dc_offset != 2
+        error("dc_offset can only contain either one or two values.")
+    end
     rename!(data, [:Timestamp, :Price])
     sort!(dc_offset, rev=true)
     return data, dc_offset
@@ -22,10 +25,12 @@ function prepare(data, dc_offset)
     # preparing dataframe for getting fit
     insertcols!(data, :pct_change => pct_change(data.Price))
     dropmissing!(data, :pct_change)
-    insertcols!(data, :TMV => NaN)
-    insertcols!(data, :T => NaN)
-    insertcols!(data, :R => NaN)
-    if length(dc_offset) > 1 
+    if length(dc_offset) == 1
+        insertcols!(data, :TMV => NaN)
+        insertcols!(data, :T => NaN)
+        insertcols!(data, :R => NaN)
+    end
+    if length(dc_offset) == 2 
         insertcols!(data, (:BBTheta => false))
         insertcols!(data, :OSV => NaN)
     end
@@ -46,7 +51,7 @@ function fit(data, dc_offset)
     for (index, offset_value) in enumerate(dc_offset)
         for row in rows
             current_offset_column = "Event_$(offset_value)"
-            last_round = offset_value == last_dc_offset && length(dc_offset) > 1
+            last_round = offset_value == last_dc_offset && length(dc_offset) == 2
             if DC_event[index] == "downtrend" || DC_event[index] == "init"
                 if row.Price >= (DC_lowest_price[index] * (1 + offset_value))
                     DC_event[index] = "uptrend"
@@ -55,17 +60,19 @@ function fit(data, dc_offset)
                     isempty(check_null_value[1]) ?
                         data[data.Timestamp .== DC_lowest_price_index[index], current_offset_column] = ["DXP"] :
                         data[data.Timestamp .== DC_lowest_price_index[index], current_offset_column] = ["Down+DXP"]
-                    TMV, T, R = calculate_TMV_T_R(data, current_offset_column, DC_lowest_price_index[index], DC_lowest_price[index], offset_value, "UXP")
-                    if !isnan(TMV)
-                        data[data.Timestamp .== DC_lowest_price_index[index], :TMV] = [TMV]
+                    if length(dc_offset) == 1
+                        TMV, T, R = calculate_TMV_T_R(data, current_offset_column, DC_lowest_price_index[index], DC_lowest_price[index], offset_value, "UXP")
+                        if !isnan(TMV)
+                            data[data.Timestamp .== DC_lowest_price_index[index], :TMV] = [TMV]
+                        end
+                        if !isnan(T)
+                            data[data.Timestamp .== DC_lowest_price_index[index], :T] = [T]
+                        end
+                        if !isnan(R)
+                            data[data.Timestamp .== DC_lowest_price_index[index], :R] = [R]
+                        end
                     end
-                    if !isnan(T)
-                        data[data.Timestamp .== DC_lowest_price_index[index], :T] = [T]
-                    end
-                    if !isnan(R)
-                        data[data.Timestamp .== DC_lowest_price_index[index], :R] = [R]
-                    end
-                    if last_round
+                    if last_round && length(dc_offset) == 2
                         osv_value = OSV(data, row.Price, DC_lowest_price_index[index], dc_offset[1], "Down")
                         if !isnan(osv_value)
                             data[(data.Timestamp .== row.Timestamp), "OSV"] = [osv_value]
@@ -91,18 +98,19 @@ function fit(data, dc_offset)
                     isempty(check_null_value[1]) ?
                         data[(data.Timestamp .== DC_highest_price_index[index]), current_offset_column] = ["UXP"] :
                         data[(data.Timestamp .== DC_highest_price_index[index]), current_offset_column] = ["Up+UXP"]
-                    TMV, T, R = calculate_TMV_T_R(data, current_offset_column, DC_highest_price_index[index], DC_highest_price[index], offset_value, "DXP")
-                    println("Value: ", TMV, " ", T, " ", R, " Timestamp: ", DC_highest_price_index[index])
-                    if !isnan(TMV)
-                        data[data.Timestamp .== DC_highest_price_index[index], :TMV] = [TMV]
-                    end
-                    if !isnan(T)
-                        data[data.Timestamp .== DC_highest_price_index[index], :T] = [T]
-                    end
-                    if !isnan(R)
-                        data[data.Timestamp .== DC_highest_price_index[index], :R] = [R]
-                    end
-                    if last_round
+                    if length(dc_offset) == 1
+                        TMV, T, R = calculate_TMV_T_R(data, current_offset_column, DC_highest_price_index[index], DC_highest_price[index], offset_value, "DXP")
+                        if !isnan(TMV)
+                            data[data.Timestamp .== DC_highest_price_index[index], :TMV] = [TMV]
+                        end
+                        if !isnan(T)
+                            data[data.Timestamp .== DC_highest_price_index[index], :T] = [T]
+                        end
+                        if !isnan(R)
+                            data[data.Timestamp .== DC_highest_price_index[index], :R] = [R]
+                        end
+                    end 
+                    if last_round && length(dc_offset) == 2
                         osv_value = OSV(data, row.Price, DC_highest_price_index[index], dc_offset[1], "Up")
                         if !isnan(osv_value)
                             data[(data.Timestamp) .== row.Timestamp, "OSV"] = [osv_value]
@@ -156,6 +164,7 @@ function calculate_OSV_value(direction, price, BTheta, rows)
     end
     return NaN
 end
+
 function calculate_TMV_T_R(data, current_offset_column, current_ext_time, current_ext_price, theta, direction)
     if direction == "UXP"
         alternate_direction = "Up+UXP"
