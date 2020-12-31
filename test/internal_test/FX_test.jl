@@ -13,26 +13,9 @@ np = pyimport("numpy")
 
 
 data = normpath(abspath(@__FILE__), "../../../../../data/fx_usd_jpy/fx_usd_jpy_close_only/all.csv")
-result_path = normpath(abspath(@__FILE__), "../../../result/all_usd_jpy.csv")
-python_result_path = normpath(abspath(@__FILE__), "../../../result/python.csv")
+result_folder = normpath(abspath(@__FILE__), "../../../result/")
 
-
-function test_dr_forex(data::CSV.File, result_path ;save_file=false, plt=false, dc_offset=[0.01])
-	df = CSV.read(data, DataFrame)
-	df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSS")
-	data = @pipe MarketRegime.init(df, dc_offset) |> MarketRegime.prepare(_...) |> MarketRegime.fit(_...)
-	if save_file
-		writing_csv = @task CSV.write(result_path, data)
-		schedule(writing_csv)
-	end
-	if plt
-		wait(writing_csv)
-		plot_graph(result_path)
-	end
-	return nothing
-end
-function test_dr_forex(data::DataFrame, result_path ;save_file=false, plt=false, dc_offset=[0.01])
-	df = data
+function test_dr_forex(df::DataFrame, result_path ;save_file=false, plt=false, dc_offset)
 	df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSS")
 	data = @pipe MarketRegime.init(df, dc_offset) |> MarketRegime.prepare(_...) |> MarketRegime.fit(_...)
 	if save_file
@@ -64,6 +47,7 @@ function market_data_test()
 	test_dr_forex(data, result_path, save_file=true, plt=false, dc_offset=[0.1])
 end
 df = CSV.read(data, DataFrame)
-test_dr_forex(df, result_path, save_file=true, plt=false)
+result_path = result_folder * "usd_jpy_0_01.csv"
+test_dr_forex(df, result_path, save_file=true, plt=false, dc_offset=[0.01])
 # plot_graph(result_path)
 # market_data_test()

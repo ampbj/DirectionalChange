@@ -8,7 +8,7 @@ function init(data::DataFrame, dc_offset::AbstractVector{<:Number})
         error("Data is not aligned with the required structure!
                 Module expects only two columns for the DataFrame: Timestamp and Price")
     end
-    if dc_offset != 1 || dc_offset != 2
+    if !(length(dc_offset) == 1 || length(dc_offset) == 2)
         error("dc_offset can only contain either one or two values.")
     end
     rename!(data, [:Timestamp, :Price])
@@ -25,6 +25,8 @@ function prepare(data, dc_offset)
     # preparing dataframe for getting fit
     insertcols!(data, :pct_change => pct_change(data.Price))
     dropmissing!(data, :pct_change)
+    [insertcols!(data, "Event_$(current_offset_value)" => "")
+                    for current_offset_value in dc_offset]
     if length(dc_offset) == 1
         insertcols!(data, :TMV => NaN)
         insertcols!(data, :T => NaN)
@@ -34,8 +36,6 @@ function prepare(data, dc_offset)
         insertcols!(data, (:BBTheta => false))
         insertcols!(data, :OSV => NaN)
     end
-    [insertcols!(data, "Event_$(current_offset_value)" => "")
-                    for current_offset_value in dc_offset]
     return data, dc_offset
 end
 
@@ -170,7 +170,7 @@ function calculate_TMV_T_R(data, current_offset_column, current_ext_time, curren
         alternate_direction = "Up+UXP"
     end
     if direction == "DXP"
-        alternate_direction = "Down+UXP"
+        alternate_direction = "Down+DXP"
     end
     found_data = data[findall(in([direction, alternate_direction]), data[!,current_offset_column]), :]
     if !isempty(found_data)
