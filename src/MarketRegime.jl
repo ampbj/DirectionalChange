@@ -4,7 +4,7 @@ using DataFrames
 
 function init(data::DataFrame, dc_offset::AbstractVector{<:Number})
     column_names = names(data)
-    if ncol(data) > 2 && column_names[0] != "Timestamp" && typeof(column_names[1]) == Float64
+    if ncol(data) > 2 || column_names[1] != "Timestamp" || typeof(column_names[1]) == Float64
         error("Data is not aligned with the required structure!
                 Module expects only two columns for the DataFrame: Timestamp and Price")
     end
@@ -177,13 +177,13 @@ function calculate_TMV_T_R(data, current_offset_column, current_ext_time, curren
         found_data = last(found_data)
         previous_ext_price = found_data.Price
         previous_ext_time = found_data.Timestamp
-        TMV = (current_ext_price - previous_ext_price) / (previous_ext_price * theta)
+        TMV = (current_ext_price - previous_ext_price) / (previous_ext_price)
         T = Date(current_ext_time) - Date(previous_ext_time)
         T = T.value
         if T == 0
             T = 1
         end
-        R = abs((TMV / T) * theta)
+        R = abs((TMV / T))
         return TMV, T, R
     else
         return NaN, NaN, NaN
