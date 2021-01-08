@@ -13,12 +13,14 @@ pd = pyimport("pandas")
 np = pyimport("numpy")
 
 
-data_path = normpath(abspath(@__FILE__), "../../../../../data/fx_usd_jpy/fx_usd_jpy_close_only/all.csv")
-result_folder = normpath(abspath(@__FILE__), "../../../result/usd_jpy/")
+# data_path = normpath(abspath(@__FILE__), "../../../../../data/fx_usd_jpy/fx_usd_jpy_close_only/all.csv")
+# result_folder = normpath(abspath(@__FILE__), "../../../result/usd_jpy/")
 
-function test_dr_forex(df::DataFrame, dc_offset::AbstractVector, result_path::String ;save_file=false, plt=false, plt_data_freq="d")
+function test_dr_forex(df::DataFrame,dc_offset::AbstractVector, 
+						result_path::String ;save_file=false, 
+						plt=false, plt_data_freq="d")
 	if typeof(df.Timestamp) != Array{DateTime,1}
-		df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSS")
+		df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSSsss")
 	end
 	data = @pipe MarketRegime.init(df, dc_offset) |> MarketRegime.prepare(_...) |> MarketRegime.fit(_...)
 	if save_file
@@ -50,7 +52,7 @@ function market_data_test()
 	test_dr_forex(data, [0.1], result_path, save_file=true, plt=false)
 end
 
-function calculate_stats(df::DataFrame, thetas)
+function calculate_stats(df::DataFrame, result_folder, thetas)
 	for (index, theta) in enumerate(thetas)
 		result_path = result_folder * "$(theta).csv"
 		data = test_dr_forex(copy(df), [theta], result_path, save_file=true, plt=false)
@@ -69,9 +71,8 @@ function mix_max_scaling(x::Array{Float64,1})
 	return x
 end
 
-df = CSV.read(data_path, DataFrame)
-# result_path = result_folder * "usd_jpy_0_01.csv"
+# df = CSV.read(data_path, DataFrame)
 # test_dr_forex(df,[0.01], result_path, save_file=true, plt=true, plt_data_freq="m")
 # market_data_test()
-thetas = [0.005:0.001:0.01;]
-calculate_stats(df, thetas)
+# thetas = [0.005:0.001:0.01;]
+# calculate_stats(df, thetas)
