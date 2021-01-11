@@ -1,7 +1,7 @@
 using DataFrames
 using CSV
 using Dates
-using MarketRegime
+using DirectionalChange
 using PyCall
 using MarketData
 using Statistics
@@ -22,7 +22,7 @@ function test_dr_forex(df::DataFrame,dc_offset::AbstractVector,
 	if typeof(df.Timestamp) != Array{DateTime,1}
 		df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSSsss")
 	end
-	data = @pipe MarketRegime.init(df, dc_offset) |> MarketRegime.prepare(_...) |> MarketRegime.fit(_...)
+	data = @pipe DirectionalChange.init(df, dc_offset) |> DirectionalChange.prepare(_...) |> DirectionalChange.fit(_...)
 	if save_file
 		writing_csv = @task CSV.write(result_path, data)
 		schedule(writing_csv)
