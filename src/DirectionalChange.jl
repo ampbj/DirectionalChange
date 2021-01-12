@@ -4,7 +4,7 @@ using Dates
 using DataFrames
 
 
-function init(data::DataFrame, dc_offset::AbstractVector{<:Number}, DC_Algo::AbstractVector{<:Symbol})
+function init(data::DataFrame, dc_offset::AbstractVector{<:Number}, DC_Algo::Symbol)
     column_names = names(data)
     if ncol(data) > 2 || column_names[1] != "Timestamp" || typeof(column_names[1]) == Float64
         error("Data is not aligned with the required structure!
@@ -13,7 +13,6 @@ function init(data::DataFrame, dc_offset::AbstractVector{<:Number}, DC_Algo::Abs
     rename!(data, [:Timestamp, :Price])
 
     # defining the type of algorith that is used in this run
-    Algo::Symbol
     if DC_Algo == :TSFDC && length(dc_offset) == 2
         sort!(dc_offset, rev=true)
         Algo = :TSFDC
@@ -68,9 +67,9 @@ function fit(data::DataFrame, dc_offset::AbstractVector{<:Number}, Algo::Symbol)
     last_dc_offset = last(dc_offset)
 
     for (index, offset_value) in enumerate(dc_offset)
+        current_offset_column = "Event_$(offset_value)"
+        last_round = offset_value == last_dc_offset
         for row in rows
-            current_offset_column = "Event_$(offset_value)"
-            last_round = offset_value == last_dc_offset && length(dc_offset) == 2
             if DC_event[index] == "downtrend" || DC_event[index] == "init"
                 if row.Price >= (DC_lowest_price[index] * (1 + offset_value))
                     DC_event[index] = "uptrend"
@@ -82,39 +81,40 @@ function fit(data::DataFrame, dc_offset::AbstractVector{<:Number}, Algo::Symbol)
                     if Algo == :Book
                         TMV, T, R = calculate_TMV_T_R(data, current_offset_column, DC_lowest_price_index[index], DC_lowest_price[index], offset_value, "UXP")
                         if !isnan(TMV)
-                            data[data.Timestamp .== DC_lowest_price_index[index], "Event_ $(current_offset_value)_TMV"] = [TMV]
+                            data[data.Timestamp .== DC_lowest_price_index[index], "$(current_offset_column)_TMV"] = [TMV]
                         end
                         if !isnan(T)
-                            data[data.Timestamp .== DC_lowest_price_index[index], "Event_ $(current_offset_value)_T"] = [T]
+                            data[data.Timestamp .== DC_lowest_price_index[index], "$(current_offset_column)_T"] = [T]
                         end
                         if !isnan(R)
-                            data[data.Timestamp .== DC_lowest_price_index[index], "Event_ $(current_offset_value)_R"] = [R]
+                            data[data.Timestamp .== DC_lowest_price_index[index], "$(current_offset_column)_R"] = [R]
                         end
                     end
                     # Dealing with TSFDC algorith
                     if Algo == :TSFDC && last_round
                         dc_current_lowest_price = data[(data.Timestamp .== DC_lowest_price_index[index]), "Event_$(dc_offset[1])"]
                         dc_current_lowest_price == ["DXP"] || dc_current_lowest_price == ["Down+DXP"] ?
-                                data[(data.Timestamp .== row.Timestamp), "Event_$(current_offset_value)_BBTheta"] = [true] :
-                                data[(data.Timestamp .== row.Timestamp), "Event_$(current_offset_value)_BBTheta"] = [false]
+                                data[(data.Timestamp .== row.Timestamp), "$(current_offset_column)_BBTheta"] = [true] :
+                                data[(data.Timestamp .== row.Timestamp), "$(current_offset_column)_BBTheta"] = [false]
                         osv_value = OSV(data, row.Price, DC_lowest_price_index[index], dc_offset[1])
                         if !isnan(osv_value)
-                            data[(data.Timestamp .== row.Timestamp), "Event_$(current_offset_value)_OSV"] = [osv_value]
+                            data[(data.Timestamp .== row.Timestamp), "$(current_offset_column)_OSV"] = [osv_value]
                         end
                     end
                     DC_highest_price[index] = row.Price
                     DC_highest_price_index[index] = row.Timestamp
                 end
+                if Algo == :IDBA
+                    PDCCs = data[data[!,current_offset_column] .== "Down", :Price]
+                    if !isempty(PDCCs)
+                        PDCC = last(PDCCs)
+                        OSV_value = ((row.Price - PDCC) / PDCC) / offset_value
+                        data[(data.Timestamp .== row.Timestamp), "$(current_offset_column)_OSV"] = [OSV_value]
+                    end
+                end
                 if row.Price <= DC_lowest_price[index]
                     DC_lowest_price[index] = row.Price
                     DC_lowest_price_index[index] = row.Timestamp     
-                end
-                if Algo == :IDBA
-                    PDCC = last(data[data[!,current_offset_column] .== "Down", :Price])
-                    if !isnan(PDCC)
-                        OSV_value = ((row.Price - PDCC) / PDCC) / offset_value
-                        data[(data.Timestamp .== row.Timestamp), "Event_$(current_offset_value)_OSV"] = [OSV_value]
-                    end
                 end
             end
             if DC_event[index] == "uptrend" || DC_event[index] == "init"
@@ -128,24 +128,24 @@ function fit(data::DataFrame, dc_offset::AbstractVector{<:Number}, Algo::Symbol)
                     if Algo == :Book
                         TMV, T, R = calculate_TMV_T_R(data, current_offset_column, DC_highest_price_index[index], DC_highest_price[index], offset_value, "DXP")
                         if !isnan(TMV)
-                            data[data.Timestamp .== DC_highest_price_index[index], "Event_ $(current_offset_value)_TMV"] = [TMV]
+                            data[data.Timestamp .== DC_highest_price_index[index], "$(current_offset_column)_TMV"] = [TMV]
                         end
                         if !isnan(T)
-                            data[data.Timestamp .== DC_highest_price_index[index], "Event_ $(current_offset_value)_T"] = [T]
+                            data[data.Timestamp .== DC_highest_price_index[index], "$(current_offset_column)_T"] = [T]
                         end
                         if !isnan(R)
-                            data[data.Timestamp .== DC_highest_price_index[index], "Event_ $(current_offset_value)_R"] = [R]
+                            data[data.Timestamp .== DC_highest_price_index[index], "$(current_offset_column)_R"] = [R]
                         end
                     end 
                     # Dealing with TSFDC algorith
                     if Algo == :TSFDC && last_round
                         dc_current_highest_price = data[(data.Timestamp .== DC_highest_price_index[index]), "Event_$(dc_offset[1])"]
                         dc_current_highest_price == ["UXP"] || dc_current_highest_price == ["Up+UXP"] ?
-                                 data[(data.Timestamp .== row.Timestamp), "Event_$(current_offset_value)_BBTheta"] = [true] :
-                                 data[(data.Timestamp .== row.Timestamp), "Event_$(current_offset_value)_BBTheta"] = [false]
+                                 data[(data.Timestamp .== row.Timestamp), "$(current_offset_column)_BBTheta"] = [true] :
+                                 data[(data.Timestamp .== row.Timestamp), "$(current_offset_column)_BBTheta"] = [false]
                         osv_value = OSV(data, row.Price, DC_highest_price_index[index], dc_offset[1])
                         if !isnan(osv_value)
-                            data[(data.Timestamp) .== row.Timestamp, "Event_$(current_offset_value)_OSV"] = [osv_value]
+                            data[(data.Timestamp) .== row.Timestamp, "$(current_offset_column)_OSV"] = [osv_value]
                         end
                     end
                     DC_lowest_price[index] = row.Price
@@ -176,7 +176,7 @@ end
 
 function calculate_OSV_value(price, BTheta, rows)
     BTheta_column = "Event_$BTheta"
-    direction == ["Down", "Down+DXP", "Up", "Up+UXP"]
+    direction = ["Down", "Down+DXP", "Up", "Up+UXP"]
     for row in eachrow(rows)
         if row[1][BTheta_column] in direction
             PDCC_BTheta = row[1].Price
@@ -206,7 +206,7 @@ function calculate_TMV_T_R(data, current_offset_column, current_ext_time, curren
         if T == 0
             T = 1
         end
-        R = abs((TMV / T) * theta)
+        R = (abs(TMV) / T) * theta
         return TMV, T, R
     else
         return NaN, NaN, NaN

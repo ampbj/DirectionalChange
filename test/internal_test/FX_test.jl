@@ -16,13 +16,13 @@ np = pyimport("numpy")
 # data_path = normpath(abspath(@__FILE__), "../../../../../data/fx_usd_jpy/fx_usd_jpy_close_only/all.csv")
 # result_folder = normpath(abspath(@__FILE__), "../../../result/usd_jpy/")
 
-function test_dr_forex(df::DataFrame,dc_offset::AbstractVector, 
+function test_dr_forex(df::DataFrame,dc_offset::AbstractVector, DC_Algo::Symbol,
 						result_path::String ;save_file=false, 
 						plt=false, plt_data_freq="d")
 	if typeof(df.Timestamp) != Array{DateTime,1}
 		df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSSsss")
 	end
-	data = @pipe DirectionalChange.init(df, dc_offset) |> DirectionalChange.prepare(_...) |> DirectionalChange.fit(_...)
+	data = @pipe DirectionalChange.init(df, dc_offset, DC_Algo) |> DirectionalChange.prepare(_...) |> DirectionalChange.fit(_...)
 	if save_file
 		writing_csv = @task CSV.write(result_path, data)
 		schedule(writing_csv)
@@ -52,15 +52,16 @@ function market_data_test()
 	test_dr_forex(data, [0.1], result_path, save_file=true, plt=false)
 end
 
-function calculate_stats(df::DataFrame, result_folder, thetas)
+function calculate_stats(df::DataFrame, result_folder, thetas::AbstractVector{<:Number}, DC_Algo::Symbol)
 	for (index, theta) in enumerate(thetas)
 		result_path = result_folder * "$(theta).csv"
-		data = test_dr_forex(copy(df), [theta], result_path, save_file=true, plt=false)
-		# R = mix_max_scaling(data.R)
-		println("TMV aggregate for $(theta) is $(sum(abs.(data[.!isnan.(data.TMV), :TMV])))")
-		println("T mean for $(theta) is $(mean(data[.!isnan.(data.T), :T]))")
-		println("R aggregate for $(theta) is $(sum(data[.!isnan.(data.R), :R]))")
-		println("----------------------------------------------------------")
+		data = test_dr_forex(copy(df), [theta], DC_Algo, result_path, save_file=true, plt=false)
+		if DC_Algo == :Book
+			println("TMV aggregate for $(theta) is $(sum(abs.(data[.!isnan.(data.TMV), :TMV])))")
+			println("T mean for $(theta) is $(mean(data[.!isnan.(data.T), :T]))")
+			println("R aggregate for $(theta) is $(sum(data[.!isnan.(data.R), :R]))")
+			println("----------------------------------------------------------")
+		end
 	end
 end
 function mix_max_scaling(x::Array{Float64,1})
