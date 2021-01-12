@@ -1,1 +1,1 @@
-# MarketRegime
+# DirectionalChange
