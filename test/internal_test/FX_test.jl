@@ -16,13 +16,13 @@ np = pyimport("numpy")
 # data_path = normpath(abspath(@__FILE__), "../../../../../data/fx_usd_jpy/fx_usd_jpy_close_only/all.csv")
 # result_folder = normpath(abspath(@__FILE__), "../../../result/usd_jpy/")
 
-function test_dr_forex(df::DataFrame,dc_offset::AbstractVector, DC_Algo::Symbol,
+function test_dr_forex(df::DataFrame,dc_offset::AbstractVector{<:Number}, DC_Algo::Symbol,
 						result_path::String ;save_file=false, 
-						plt=false, plt_data_freq="d")
+						plt=false, plt_data_freq="d", down_ind=Vector{Number}(undef, 1)::AbstractVector{<:Number})
 	if typeof(df.Timestamp) != Array{DateTime,1}
 		df[!,:Timestamp] = parse.(DateTime, df.Timestamp, dateformat"yyyymmdd\ HHMMSSsss")
 	end
-	data = @pipe DirectionalChange.init(df, dc_offset, DC_Algo) |> DirectionalChange.prepare(_...) |> DirectionalChange.fit(_...)
+	data = @pipe DirectionalChange.init(df, dc_offset, DC_Algo, down_ind) |> DirectionalChange.prepare(_...) |> DirectionalChange.fit(_...)
 	if save_file
 		writing_csv = @task CSV.write(result_path, data)
 		schedule(writing_csv)

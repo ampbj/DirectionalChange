@@ -4,7 +4,7 @@ using Dates
 using DataFrames
 
 
-function init(data::DataFrame, dc_offset::AbstractVector{<:Number}, DC_Algo::Symbol)
+function init(data::DataFrame, dc_offset::AbstractVector{<:Number}, DC_Algo::Symbol, down_ind=Vector{Number}(undef, 1)::AbstractVector{<:Number})
     column_names = names(data)
     if ncol(data) > 2 || column_names[1] != "Timestamp" || typeof(column_names[1]) == Float64
         error("Data is not aligned with the required structure!
@@ -17,6 +17,9 @@ function init(data::DataFrame, dc_offset::AbstractVector{<:Number}, DC_Algo::Sym
         sort!(dc_offset, rev=true)
         Algo = :TSFDC
     elseif DC_Algo == :IDBA
+        if !isassigned(down_ind, 1)
+            error("In case of IDBA algorithm down_ind vector can not be empty")
+        end
         sort!(dc_offset)
         Algo = :IDBA
     elseif DC_Algo == :Book
@@ -25,7 +28,7 @@ function init(data::DataFrame, dc_offset::AbstractVector{<:Number}, DC_Algo::Sym
     else
         error("Type of algorithm and/or number of items in dc_offset vector are not correct!")
     end
-    return data, dc_offset, Algo
+    return data, dc_offset, Algo, down_ind
 end
 
 function pct_change(input::AbstractVector{<:Number}, period::Int=1)
@@ -33,7 +36,7 @@ function pct_change(input::AbstractVector{<:Number}, period::Int=1)
     [fill(missing, period); res]
 end
 
-function prepare(data::DataFrame, dc_offset::AbstractVector{<:Number}, Algo::Symbol)
+function prepare(data::DataFrame, dc_offset::AbstractVector{<:Number}, Algo::Symbol, down_ind::AbstractVector{<:Number})
         # preparing dataframe for getting fit
     insertcols!(data, :pct_change => pct_change(data.Price))
     dropmissing!(data, :pct_change)
@@ -47,16 +50,18 @@ function prepare(data::DataFrame, dc_offset::AbstractVector{<:Number}, Algo::Sym
             insertcols!(data, "Event_$(current_offset_value)_T" => NaN)
             insertcols!(data, "Event_$(current_offset_value)_R" => NaN)
         elseif Algo == :IDBA
-            insertcols!(data, "Event_$(current_offset_value)_OSV" => NaN)
+            for down_index in down_ind
+                insertcols!(data, "Event_$(current_offset_value)_OSV_down_ind_$(down_index)" => NaN)
+            end
         elseif Algo == :TSFDC && current_offset_value == last_dc_offset
             insertcols!(data, "Event_$(current_offset_value)_BBTheta" => false)
             insertcols!(data, "Event_$(current_offset_value)_OSV" => NaN)
         end
     end
-    return data, dc_offset, Algo
+    return data, dc_offset, Algo, down_ind
 end
 
-function fit(data::DataFrame, dc_offset::AbstractVector{<:Number}, Algo::Symbol)
+function fit(data::DataFrame, dc_offset::AbstractVector{<:Number}, Algo::Symbol, down_ind::AbstractVector{<:Number})
     rows = Tables.namedtupleiterator(data)
     dc_offset_length = length(dc_offset)
     DC_event = repeat(["init"], dc_offset_length)
@@ -109,10 +114,13 @@ function fit(data::DataFrame, dc_offset::AbstractVector{<:Number}, Algo::Symbol)
             if Algo == :IDBA && isassigned(IDBA_last_downtrend, index) && !isempty(IDBA_last_downtrend[index])
                 last_downtrend_time = IDBA_last_downtrend[index].Timestamp[1]
                 last_downtrend_price = IDBA_last_downtrend[index].Price[1]
-                if row.Timestamp > last_downtrend_time && row.Price < last_downtrend_price
+                if row.Timestamp > last_downtrend_time
                     OSV = ((row.Price - last_downtrend_price) / last_downtrend_price) / offset_value
-                    data[(data.Timestamp .== row.Timestamp), "$(current_offset_column)_OSV"] = [OSV]
-                    # println("last Timestamp: $(row.Timestamp) offset_value = $(offset_value)")
+                    for down_index in down_ind
+                        if OSV > down_index
+                            data[(data.Timestamp .== row.Timestamp), "$(current_offset_column)_OSV_down_ind_$(down_index)"] = [OSV]
+                        end
+                    end
                 end
             end
             if row.Price <= DC_lowest_price[index]
